@@ -1,0 +1,7 @@
+runtime: nodejs20
+
+env_variables:
+  NODE_ENV: production
+  ANTHROPIC_API_KEY: <API key>
+  TELEGRAM_BOT_TOKEN: <API key>
+  DEBUG_TELEGRAM: "true"
