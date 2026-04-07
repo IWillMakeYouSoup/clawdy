@@ -2,3 +2,5 @@ app.yaml
 .env
 .env.example
 .env.production
+node_modules/
+service-account.json
