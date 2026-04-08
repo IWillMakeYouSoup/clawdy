@@ -17,7 +17,10 @@ const TELEGRAM_API = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOK
 const IS_LOCAL = process.env.NODE_ENV !== "production";
 const DEBUG_TELEGRAM = process.env.DEBUG_TELEGRAM === "true";
 
-const tools = [...goalTools, ...userTools, ...soulTools, ...heartbeatTools, ...weatherTools];
+const tools = [
+  ...goalTools, ...userTools, ...soulTools, ...heartbeatTools, ...weatherTools,
+  { type: "web_search_20250305", name: "web_search" },
+];
 
 async function runTool(name, input, userId) {
   if (goalTools.some((t) => t.name === name)) return goalRun(name, input, userId);
@@ -29,10 +32,17 @@ async function runTool(name, input, userId) {
 }
 
 function buildSystemPrompt(topGoals, userAbout, soulManifest) {
+  const now = new Date().toLocaleString("en-GB", {
+    timeZone: "Europe/Paris",
+    dateStyle: "full",
+    timeStyle: "short",
+  });
+
   const lines = [
     "# Soul Manifest",
     soulManifest,
     "\n# Assistant Instructions",
+    `Current date and time: ${now} (CET)`,
     "You are a personal assistant and coach. Be concise, warm, and proactive.",
     "If the user mentions something that sounds like an important goal not yet tracked, suggest saving it.",
   ];
@@ -78,7 +88,7 @@ async function askClaude(userText, userId) {
   while (true) {
     const response = await client.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 1024,
+      max_tokens: 4096,
       system,
       tools,
       messages,
@@ -90,7 +100,7 @@ async function askClaude(userText, userId) {
       const reply = response.content.find((b) => b.type === "text")?.text ?? "";
       await saveHistory(userId, [
         ...history,
-        { role: "user", content: userText },
+        { role: "user", content: `[${new Date().toLocaleString("en-GB", { timeZone: "Europe/Paris", dateStyle: "short", timeStyle: "short" })}] ${userText}` },
         { role: "assistant", content: reply },
       ]);
       return reply;

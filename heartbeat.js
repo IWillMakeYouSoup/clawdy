@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { listDueJobs, markJobRan } from "./mcp/heartbeat/db.js";
 import { getSoulManifest } from "./mcp/soul/index.js";
 import { getUserAbout } from "./mcp/user/index.js";
-import { getTelegramChatId } from "./db.js";
+import { getTelegramChatId, getHistory, saveHistory } from "./db.js";
 
 const router = Router();
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -18,7 +18,7 @@ async function sendTelegram(chatId, text) {
 }
 
 async function runJob(job) {
-  const { userId, jobId, cronExpression, timezone, prompt, respondToUser = true } = job;
+  const { userId, jobId, name, cronExpression, timezone, prompt, respondToUser = true } = job;
 
   const telegramChatId = respondToUser ? await getTelegramChatId(userId) : null;
   if (respondToUser && !telegramChatId) {
@@ -48,7 +48,20 @@ async function runJob(job) {
   });
 
   const reply = response.content.find((b) => b.type === "text")?.text ?? "";
-  if (reply) await sendTelegram(telegramChatId, reply);
+  if (reply) {
+    await sendTelegram(telegramChatId, reply);
+    const now = new Date().toLocaleString("en-GB", {
+      timeZone: "Europe/Paris",
+      dateStyle: "short",
+      timeStyle: "short",
+    });
+    const history = await getHistory(userId);
+    await saveHistory(userId, [
+      ...history,
+      { role: "user", content: `[${now}] [Scheduled: ${name}] ${prompt}` },
+      { role: "assistant", content: reply },
+    ]);
+  }
 
   await markJobRan(userId, jobId, cronExpression, timezone);
 }
@@ -64,6 +77,17 @@ router.get("/", async (_req, res) => {
         ran++;
       } catch (err) {
         console.error(`Heartbeat job ${job.jobId} failed:`, err.message);
+        try {
+          const chatId = await getTelegramChatId(job.userId);
+          if (chatId) {
+            await sendTelegram(
+              chatId,
+              `Hey, something went wrong with your scheduled task "${job.name}" — here's what happened:\n\n${err.message}`
+            );
+          }
+        } catch (notifyErr) {
+          console.error(`Failed to notify user ${job.userId} of job error:`, notifyErr.message);
+        }
       }
     })
   );
